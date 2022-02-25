@@ -1,0 +1,678 @@
+---
+title: 'Final project: Predictive analytic '
+author: Nguyễn Tú anh ; Nguyễn Vũ Minh Nguyệt ; Phan Hà Minh Phương; Nguyễn Thị Anh Thư
+
+date: "Hà Nội, ngày 23 tháng 12 năm 2021"
+output:
+  rmdformats::readthedown:
+    highlight: tango
+  theme: default
+  pdf_document: default
+  word_document: default
+  html_document:
+    df_print: paged
+header-includes:
+- \usepackage{tikz}
+- \usepackage{pgfplots}
+- \usetikzlibrary{arrows,automata,positioning}
+- \usepackage[utf8]{inputenc}
+- \usepackage[utf8]{vietnam}
+- \usepackage{etoolbox}
+- \usepackage{xcolor}
+- \makeatletter
+- \preto{\@verbatim}{\topsep=0pt \partopsep=-0pt}
+- \makeatother
+- \DeclareMathOperator*{\argmax}{arg\,max}
+- \newcommand\tstrut{\rule{0pt}{3ex}}
+- \newcommand\bstrut{\rule[-2.5ex]{0pt}{0pt}}
+---  
+---
+
+```{css , echo= FALSE}
+/* Whole document: */
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+}
+
+#main .nav-pills > li.active > a,
+#main .nav-pills > li.active > a:hover,
+#main .nav-pills > li.active > a:focus {
+background-color: #22983B;
+}
+
+#main table:not(.dataTable) td, #main table:not(.dataTable) th {
+    font-size: 65%;
+    padding: 8px;
+}
+#main .nav-pills > li > a:hover {
+background-color: #22983B;
+}
+
+h1,h2,h3,h4,h5,h6,legend{
+color: #22983B;
+}
+
+#nav-top span.glyphicon {
+color: #22983B;
+}
+
+#table-of-contents header{
+color:#22983B;
+}
+
+#table-of-contents h2{
+background-color:#22983B;
+}
+
+#sidebar h2 {
+background-color:  #A2E4B8;
+}
+
+#sidebar h2 a{
+background-color:  black;
+}
+
+#main a {
+background-image: linear-gradient(180deg,#d64a70,#d64a70);
+color: blue;
+}
+
+a:hover{
+color: blue
+}
+
+a:visited{
+color: blue
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+```{r, echo= FALSE}
+library(tidyverse)
+library(dplyr)
+library(readxl)
+library(ggpubr)
+library(patchwork)
+library(ggcorrplot)
+library(MASS)
+library(GGally)
+library(DataExplorer)
+#install.packages("corrplot")
+library(corrplot)
+library(ggplot2)
+#install.packages("tree")
+#install.packages("rpart")
+library(tree)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+#install.packages("rattle")
+library(rattle)
+#install.packages("lattice")
+#library(caret)
+#install.packages("Matrix")
+library(Matrix)
+```
+
+\newpage
+```{r,echo=FALSE, results='hide'}
+train <- read_csv("C:/Users/admin/Downloads/PA_final/Final project/train.csv")
+```
+
+# **PART 1: DATA OVERVIEW**
+## 1.1. Introduction
+I have just arrived in the USA to take on an actuarial job. I want to buy a used car for my daily work. In order to purchase a suitable used car at an affordable price, a costomer who do not have experienced car buyer like myself needs to have accurate information about the type of used car I am interested in. Building a model and choosing a model to predict the used car price, so we can see the relationship between car price and other factors affecting price such as model type, year of manufacture, the transmission structure of the car,…. From there, I can make the best decision about the requirements I need for the car, but the price will not be too high compared to the original price of the product because the seller has pushed the price. The car brand I am interested in is the German automaker BMW. The following is selected transaction data of 8,536 used cars that are recently sold.
+
+## 1.2.	Description of variables in the data
+In order to know if the seller has changed the price or not and which car has the most reasonable and suitable price for me, I have information on the prices of more than 8500 cars that have been sold with information about the type of vehicle. , type of vehicle fuel used, tax, .... The data is saved in the file “train.csv”:
+
+```{r}
+glimpse(train)
+```
+
+| Variable  |      Meaning |
+|:----------|:-------------|
+|model| The name of the BMW vehicle|
+|year| The year in which the vehicle was manufactured|
+|price| The price of the vehicle|
+|transmission| The transmission structure of the vehicle (automatic car, manual car …)|
+|mileage | The number of kilometers the vehicle has traveled|
+|fuelType| The type of fuel that the car uses|
+|tax| The annual fee that the car owner has to pay|
+|mpg| The number of kilometers the car can travel if using 1 gallon of gasoline|
+|engineSize| The cylinder capacity of the vehicle|
+
+# **PART 2: DATA PREPROCESSING** 
+## 2.1 Statistical description
+This is a summary of the variables in the dataset
+```{r}
+summary(train)
+plot_intro(train)
+str(train)
+df= train
+```
+The dataset contains 67% continuos variables and 33% discrete variables. Most of variables are in numeric form, such as "year", "price", ... except three variables "transmission", "fuelType" and "model" are in character form.
+
+## 2.2 Cleaning up
+
+```{r}
+#### check missing
+colSums(is.na(train))
+```
+
+There is no missing value.
+
+## 2.3 Outliers
+Outliers have serious complications in statistical analyses. They are usually indicate faulty data, erroneous procedures, or areas where a certain theory might not be valid. 
+However, we would replace outliers to only regression model since other models such as Decision tree or Random Forest can handle outliers effectively.
+
+# **PART 3: DATA VISUALIZATION**
+
+### Price of used car
+
+```{r}
+ggplot(df,aes(x=price))+ 
+  geom_histogram(fill = "blue", alpha = 0.7) + 
+  xlim(0,80000)
+```
+Price of used cars fall between 0 to more than 75000 and mostly around 20000. As more people can afford the middle price of used cars, the price mostly falls around 25000, very little used cars at 60000 to 80000 were sold and nearly no used cars had demands at price 80000 and above.
+
+```{r}
+ggplot(df,aes(x=fuelType, y=price))+
+  geom_boxplot()
+```
+
+The median price of used cars with every fuel types all falls below 25000
+
+```{r}
+ggplot(df,aes(x=year, y=price, group = year))+
+  geom_boxplot()
+```
+
+There is a tendency that the newest cars have higher price than the old models as obviously. People agree to pay more for the cars which have not had many years in  used. 
+
+### Type of model and car price
+```{r}
+ggplot(df,aes(x=model, y=price))+
+  geom_boxplot()
+```
+
+There are 7 types of models do not have outliers (7 Series, i3, X4, X5, X6, X7, Z4). The used car with the highest price belongs to the model 2 Series.
+
+### Tax
+```{r}
+ggplot(data = df, mapping = aes(x= tax, y = price))+
+  geom_point(color = "blue")
+```
+
+Used cars with tax falls mostly between 100 to more than 300 were sold well. Still have some people pays for used car with low tax (below 50) and very little spent money for used cars with tac over 500. There is a blank space of tax between 50 to 100 and 350 to 550.
+
+### Mileage
+```{r}
+ggplot(df, aes(x = mileage, y = price))+
+  geom_point(alpha = 0.05)+
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+It is obviously that the smaller the mileage is the higher in the price. The increasing in mileage follows by the lower in number of people buy. Most of people spent their money in used car with mileage from 0 to below 100000.
+
+### Mpg
+```{r}
+df$am.fac<- factor(df$transmission, levels = c(0,1),
+                             labels = c("Automatic","Manual"))
+ggplot(data = df, mapping = aes(x = price, y = mpg))+
+  geom_point(size = 5, alpha =0.4, color = "pink")+
+  geom_smooth(method = "lm")+
+  xlab("Price")+
+  ylab("Miles per Gallon")
+```
+
+Most people bought used cars with miles per gallon up to 100 with price below 75000. Higher Miles per gallon means that car is energy saving. Nevertheless, the energy saving is not one of important consumers’ consideration since not many people chose to buy cars with more than 400 miles per gallon (highly energy saving).
+
+# **PART 4: DATA MODELING**
+
+```{r}
+train <- read_csv("C:/Users/admin/Downloads/PA_final/Final project/train.csv")
+
+```
+## 4.1 LINEAR REGRESSION
+
+Linear regression is one of the simplest and most common supervised machine learning algorithms that data scientists use for predictive modeling. In this project, we’ll use linear regression to build a model that predicts price of used car.
+
+### Outliers Handling
+
+```{r}
+boxplot(train$year, train$price, train$mileage, train$tax, train$mpg, train $engineSize,
+        main = "Outliers",
+        names = c("year" , "price","mileage","tax","mpg","engineSize"),
+        las = 2,
+        col = c("orange","brown"),
+        border = "black",
+        horizontal = TRUE,
+        notch = TRUE
+)
+```
+```{r}
+outlier_by_mean <- function(x){
+  Q <- quantile(x, probs=c(.25, .75), na.rm = FALSE)
+  Iqr = IQR(x)
+  
+  above = Q[2] + 1.5*Iqr
+  below = Q[1] - 1.5*Iqr
+  x[x > above | x < below] <- mean(x, na.rm = TRUE)
+  return(x)
+}
+train<- train%>% mutate_if(is.numeric, outlier_by_mean)
+
+```
+
+### Standardize
+
+```{r}
+standardize= function(x){
+  x=(x-mean(x,na.rm=TRUE))/sd(x,na.rm=TRUE)}
+for(col in names(train)){
+  if((col!="price")&class(train[,col]) %in% c("integer","numeric")){
+    train[,col]= standardize(train[,col])
+  }
+}
+```
+
+### The Validation set Approach
+```{r}
+library(caret)
+set.seed(1)
+training.samples <- train$price %>%
+  createDataPartition(p = 0.7, list = FALSE)
+train.data  <- train[training.samples, ]
+test.data <- train[-training.samples, ]
+# Build the model
+model <- lm(price ~., data = train.data)
+# Make predictions and compute the R2, RMSE and MAE
+predictions <- model %>% predict(test.data)
+D = data.frame( R2 = R2(predictions, test.data$price),
+            RMSE = RMSE(predictions, test.data$price),
+            MAE = MAE(predictions, test.data$price))
+print(D, quote = TRUE, row.names = FALSE)
+```
+
+## 4.2 RIDGE REGRESSION
+
+Ridge regression is an extension of linear regression where the loss function is modified to minimize the complexity of the model. This modification is done by adding a penalty parameter that is equivalent to the square of the magnitude of the coefficients.
+
+```{r}
+library(glmnet)
+```
+
+```{r}
+set.seed(1)
+test_index = createDataPartition(train$price, times =1, p =0.3, list = FALSE)
+x<-model.matrix(price~ .,train)[,-3]
+y<-train$price
+x.train<-x[-test_index,]
+y.train<-y[-test_index]
+x.test<-x[test_index,]
+y.test<-y[test_index]
+
+```
+
+```{r}
+ridge.reg<-glmnet(x.train,y.train,alpha=0,lambda=1)
+coef(ridge.reg)
+ridge.pred=predict(ridge.reg, newx=x.test)
+sqrt(mean((ridge.pred-y.test)^2))
+```
+
+```{r}
+v.lambda<-10^seq(-3,2,length=500)
+cv.out<-cv.glmnet(x.train, y.train, alpha = 0,
+                  nfolds = 5, lambda=v.lambda)
+cv.out$lambda.min   
+ridge.reg = glmnet (x.train,y.train, alpha = 0,
+                    lambda = cv.out$lambda.min) 
+ridge.pred= predict(ridge.reg , newx=x.test) 
+sqrt(mean((ridge.pred-y.test)^2))  
+```
+
+## 4.3 LASSO REGRESSION
+
+Lasso regression, or the Least Absolute Shrinkage and Selection Operator, is also a modification of linear regression. In lasso, the loss function is modified to minimize the complexity of the model by limiting the sum of the absolute values of the model coefficients 
+
+```{r}
+cv.out<-cv.glmnet(x.train, y.train, alpha = 1,
+                  nfolds = 5, lambda=v.lambda)    
+lasso.reg<-glmnet (x.train,y.train, alpha = 1,
+                   lambda = cv.out$lambda.min)
+lasso.pred<-predict(lasso.reg , newx=x.test)
+sqrt(mean((lasso.pred-y.test)^2))
+```
+
+```{r}
+v.lambda<-10^seq(-3,2,length=500)
+cv.out<-cv.glmnet(x.train, y.train, alpha = 0,
+                  nfolds = 5, lambda=v.lambda)
+plot(cv.out$lambda,cv.out$cvm)
+cv.out$lambda.min   
+lasso.reg = glmnet (x.train,y.train, alpha = 1,
+                    lambda = cv.out$lambda.min)  
+lasso.pred= predict(lasso.reg , newx=x.test) 
+sqrt(mean((lasso.pred-y.test)^2))
+```
+
+## 4.4 GAM
+
+A generalized additive model (GAM) is a generalized linear model (GLM) in which the linear predictor is given by a user specified sum of smooth functions of the covariates plus a conventional parametric component of the linear predictor.  
+
+```{r}
+train <- read_csv("C:/Users/admin/Downloads/PA_final/Final project/train.csv")
+dat = train
+
+set.seed(1)
+test_index = createDataPartition(train$price, times =1, p =0.3, list = FALSE)
+test = dat[test_index,]
+train = dat[-test_index,]
+```
+
+```{r}
+#install.packages("gam")
+library(gam)
+```
+
+```{r}
+gam = gam(price~s(year,df = 10)+s(tax,df = 10)+s(mpg, df = 10)+s(engineSize, df= 10)+s(mileage, df = 10)+ fuelType + model + transmission, data=train, select = TRUE)
+gam.pred.train = predict(gam, train)
+gam.pred.test = predict(gam, test)
+RMSE(train$price, gam.pred.train)
+RMSE(test$price, gam.pred.test)
+
+```
+
+## 4.5 DECISION TREE
+
+  Generally speaking, decision trees are able to handle outliers because their leafs are constructed under metrics which aim to discriminate as much as possible the resulting subsets. Whether you are using Gini Impurity, Information Gain or Variance Reduction to construct your decision tree does not change the outcome. 
+
+  Most likely outliers will have a negligible effect because the nodes are determined based on the sample proportions in each split region (and not on their absolute values).
+  
+```{r}
+train <- read_csv("C:/Users/admin/Downloads/PA_final/Final project/train.csv")
+dat = train
+
+set.seed(1)
+test_index = createDataPartition(train$price, times =1, p =0.3, list = FALSE)
+test = dat[test_index,]
+train = dat[-test_index,]
+```
+
+### TREE function
+```{r}
+tree.full = tree(price ~., data = train, 
+             control = tree.control(nobs = nrow(train),mincut = 15, minsize = 40, mindev =0.01))
+plot(tree.full)
+text(tree.full, pretty = 0)
+pred.tree = predict(tree.full, newdata = test)
+RMSE(pred.tree,test$price)
+```      
+
+```{r}
+# cross validation
+cv.tree.full = cv.tree(tree.full, K =5)
+plot(cv.tree.full$size,cv.tree.full$dev)
+L = cv.tree.full$size[which.min(cv.tree.full$dev)]
+tree.full = prune.tree(tree.full, best = L)
+pred.tree = predict(tree.full, newdata = test)
+RMSE(pred.tree, test$price)
+```
+
+The result does not change
+
+### RPART Package
+```{r}
+# Training
+tree.full1= rpart(price~ ., data = train, method = "anova")
+rpart.plot(tree.full1)
+pred.tree1 = predict(tree.full1, newdata = test)
+RMSE(pred.tree1, test$price) #4774
+```
+
+### Cross validation
+```{r}
+cv.tree.full1 = rpart(price~ ., data = train)
+```
+
+### Show one standard deviation of the x-validated error.
+```{r}
+plotcp(cv.tree.full1)
+printcp(cv.tree.full1)
+cv.tree.full1 = prune.rpart(tree.full1,cp = 0.010)
+rpart.plot(cv.tree.full1)
+```
+
+```{r}
+# Prediction
+cv.pred.tree1 = predict(cv.tree.full1, newdata = test)
+RMSE(cv.pred.tree1, test$price)
+```
+
+The outcomes are the same
+
+## 4.6 BAGGING
+
+Bootstrap aggregating, also called bagging, is one of the first ensemble algorithms machine learning practitioners learn and is designed to improve the stability and accuracy of regression and classification algorithms. By model averaging, bagging helps to reduce variance and minimize overfitting. Although it is usually applied to decision tree methods, it can be used with any type of method
+
+```{r}
+#install.packages("randomForest")
+library(randomForest)
+library(caret)
+library(dplyr)       #for data wrangling
+library(e1071)       #for calculating variable importance
+library(caret)       #for general model fitting
+library(rpart)       #for fitting decision trees
+library(ipred)       #for fitting bagged decision trees
+```
+
+```{r}
+set.seed(1)
+test_index = createDataPartition(train$price, times =1, p =0.3, list = FALSE)
+test = dat[test_index,]
+train = dat[-test_index,]
+```
+
+### Fit the bagged model
+```{r}
+bag.fit = bagging(formula = price~., 
+                  data = train,
+                  nbagg = 150,
+                  coob = TRUE,
+                  control = rpart.control(minsplit = 9, cp =0))
+bag.pred = predict(bag.fit, newdata = test)
+```
+### Display fitted bagged model
+```{r}
+bag.fit
+```
+
+## 4.7 RANDOM FOREST
+
+Random forests are a modification of bagged decision trees that build a large collection of de-correlated trees to further improve predictive performance. They have become a very popular “out-of-the-box” or “off-the-shelf” learning algorithm that enjoys good predictive performance with relatively little hyperparameter tuning
+
+```{r}
+library(ggthemes)
+library(scales)
+#install.packages("psych")
+library(psych)
+library(repr)
+options(repr.plot.width=12, repr.plot.height = 12)
+options(scipen=999)
+
+```
+
+```{r}
+set.seed(1)
+test_index = createDataPartition(train$price, times =1, p =0.3, list = FALSE)
+test = dat[test_index,]
+train = dat[-test_index,]
+nfold = 4
+pp = 1:nrow(train)
+index = as.list(0)
+for (i in 1:nfold){
+  index[[i]] = sample(pp,nrow(train)/nfold)
+  pp = pp[-index[[i]]]
+}
+
+
+valid_train = as.list(0)
+valid_test = as.list(0)
+for (i in 1:nfold){
+  valid_train[[i]] = train[-index[[i]],]
+  valid_test[[i]] = train[index[[i]],]
+}
+```
+
+### Create Our Model
+```{r}
+rf.fit = as.list(0)
+for (k in 1:nfold){
+  rf.fit[[k]] = train(price~., valid_test[[k]],method = 'rf',
+                     trControl=trainControl(method="none"))
+}
+```
+
+```{r}
+# RMSE
+rf.pred = as.list(0)
+MSE = as.list(0)
+for (k in 1:nfold){
+  rf.pred[[k]] = predict(rf.fit[[k]],newdata=valid_test[[k]][,-3])
+  MSE[[k]] = mean((rf.pred[[k]]-valid_test[[k]]$price)^2)
+}
+
+RMSE = sqrt(1/nfold*(MSE[[1]]+MSE[[2]]+MSE[[3]]+MSE[[4]]))
+RMSE
+```
+
+### Making prediction
+```{r}
+rf.prediction = as.list(0)
+for (k in 1:nfold){
+  rf.prediction[[k]] = predict(rf.fit[[k]],newdata=test)
+}
+
+rf.prediction = 1/nfold*(rf.prediction[[1]]+rf.prediction[[2]]+
+                          rf.prediction[[3]]+rf.prediction[[4]])
+```
+
+## 4.8. BOOSTING
+
+```{r}
+#install.packages("gbm")
+library(gbm)
+```
+
+```{r}
+boost.fit = gbm(price~ year + tax + mpg + engineSize,
+                data = train,
+                n.trees = 5000,
+                interaction.depth = 5,
+                shrinkage = 0.1)
+boost.pred = predict(boost.fit, newdata = test)
+RMSE(boost.pred, test$price)
+```
+
+## 4.9 XGBOOSTING
+
+```{r}
+#install.packages("xgboost")
+library(xgboost)
+```
+
+```{r}
+dtrain = data.matrix(dplyr::select(train, - price))
+xgb = xgboost(data = dtrain,
+              label = train$price, nround = 1000,
+              max.depth = 3, eta = 0.05, verbose = 0)
+pred = predict(xgb,data.matrix(dplyr::select(test, - price)))
+RMSE(pred, test$price) 
+```
+
+# **PART 5 : CONCLUSION**
+
+## 5.1 Price prediction
+
+It is clear that Random Forest give out the best performance, then we would like to make prediction by this method on Test set
+```{r}
+Test = read_csv("C:/Users/admin/Downloads/PA_final/Final project/test.csv")
+```
+
+
+It seem that the 4th fold carries out the lowest cross validation error. We will use this to predict on the test set
+
+```{r}
+price = predict(rf.fit[[4]], newdata = Test)
+```
+
+## 5.2 Recommendation from insights
+
+### price with year
+
+```{r}
+p <- ggplot(data = Test, aes(x = year, y = price)) + 
+     geom_line(color = "#00AFBB", size = 1)+ 
+     stat_smooth(color = "#FC4E07", fill = "#FC4E07")
+p
+```
+The range of price with car produce before 2005 is quite large, but clearly, the more recent produced cars will be charged higher.
+
+### price with mileage
+
+```{r}
+ggplot(Test, aes(x = mileage, y = price)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  xlab("Mileage") +
+  ylab("Price") +
+  ggtitle("Price of Car by Mileage")
+```
+It is obvious that the cars with smaller mileage will have higher price. With 0 mileage car can charge more than 40000 per one and this price decrease with larger mileage. Overall, the price does not decrease below around 10000.
+
+### price with mpg
+
+```{r}
+mpg <- ggplot(Test, aes(x = mpg, y = price)) +   geom_point() 
+mpg
+```
+
+It shows that clearly used car with mile per galon smaller will be sold better than others. From about 30 to 80 mpg, the price would be higher with smaller mpg.
+
+### Price with transmission
+```{r}
+ggplot(Test, aes(x = transmission, y = price, fill = transmission)) + 
+  geom_boxplot(outlier.color = "red") + 
+  theme(legend.position = "none") +
+  xlab("Transmission") +
+  ylab("Price") +
+  ggtitle("Price Distribution of Car Transmission")
+```
+  The average price of Semi-auto cars seem to be the highest in comparison with other types. However, there are customers who are wiling to pay more than 40000 for automatic cars.
+
+### FuelType
+
+```{r}
+ggplot(Test, aes(x = fuelType, y = price, fill = fuelType)) + 
+  geom_boxplot(outlier.color = "grey") + 
+  theme(legend.position = "none") +
+  xlab("fuelType") +
+  ylab("Price") +
+  ggtitle("Price Distribution of fuelType")
+```
+Almost people choose car using petrol, however, the price of hybrid car seem to slightly higher than others. There is little customer choose other types of fuel.
+
+### Recommendation
+  In conclusion, we should buy a car using petro, diesel, hybrid fuel because cars using this fuel are more popular, vary models and types with difference price. From there, I can choose the car that suits my needs.Moreover, buy a car with low mileage to minimize wear and engine failure.
+  
+  In terms of MPG criteria, the higher the MPG rating, the more fuel-efficient the vehicle is. This is quite important because for the ticks with the highest MPG belong to vehicles using electric fuel and other fuels. Vehicles using the remaining fuels have low to medium MPG ratings. But in return, if using vehicles using this fuel, it will be easier in the process of fueling and maintaining the vehicle.
+  
+  Manual transmission is for people who rarely ride and learn to ride because cars using this gearbox are easy to act and control. For semi-manual transmissions, the selection of gears to suit operating conditions is handled by the computer and the driver can intervene. However this cannot be as good as using a manual transmission. Regarding Auto transmission , up to now, the majority of cars sold are equipped with automatic transmissions due to convenience, reducing the driver's control manipulation, helping them focus on traffic situation and handling situations on the road better. Therefore, choosing a car with auto mode will be better and have a better price.
+
